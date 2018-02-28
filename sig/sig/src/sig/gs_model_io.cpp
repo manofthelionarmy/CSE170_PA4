@@ -45,12 +45,6 @@ bool GsModel::load ( const char* fname )
 	return ret;
 }
 
-/*static void settexture ()
- {
-   textures.top().fname=0;
-   textures.top().fullfname=0;
- }*/
-
 bool GsModel::load ( GsInput &in )
 {
 	if ( !in.valid() ) return false;
@@ -109,7 +103,7 @@ bool GsModel::load ( GsInput &in )
 		{	F.size(in.geti());
 			for ( i=0; i<F.size(); i++ ) // fscanf call is equiv to: in >> F[i];
 			{	if ( fscanf ( in.filept(), "%d %d %d", &F[i].a, &F[i].b, &F[i].c )!=3 ) return false;
-				F[i].validate(); 
+				F[i].validate();
 			}
 		}
 		else if ( s=="normals" ) // read N: x y z
@@ -205,7 +199,7 @@ bool GsModel::load ( GsInput &in )
 	if ( Fm.size() ) define_groups ( Fm, mtlnames.size()==M.size()? &mtlnames:0 );
 
 	compress ();
-	detect_mode();
+	detect_mode ();
 	GS_TRACE1 ( "OK.\n" );
 
 	return true;

@@ -379,4 +379,89 @@ bool gs_in_triangle_interior ( double p1x, double p1y, double p2x, double p2y, d
 		   GS_CCW(px,py,p3x,p3y,p1x,p1y)>0;
 }
 
+double gs_tangent ( double px, double py, double cx, double cy, double r, 
+					double& t1x, double& t1y, double& t2x, double& t2y ) // (p,c,t1):CCW, (p,c,t2):CW
+{
+	double d2 = gsdist2(px,py,cx,cy);
+	double d = d2-r*r;
+	if ( d<=0 ) return -1;
+	double s = sqrt ( d );
+	d = sqrt ( d2 );
+   
+	if ( d==0 ) return -1;
+	cx = (cx-px)/d; // c-p unit vector 
+	cy = (cy-py)/d;
+   
+	double sa = r/d; // get sinus and cosinus
+	double ca = s/d;
+	t1x = (cx*ca-cy*sa) * s + px; // rotate and scale
+	t1y = (cx*sa+cy*ca) * s + py;
+	sa=-sa;
+	t2x = (cx*ca-cy*sa) * s + px; // now rotate to the other side
+	t2y = (cx*sa+cy*ca) * s + py;
+
+	/* code fragment to test this function:
+	double tx1, ty1, tx2, ty2, px=1, py=1, cx=-5, cy=5, r=3;
+	gs_tangent(px,py,cx,cy,r,tx1,ty1,tx2,ty2);
+	gsout<<tx1<<","<<ty1<<gsnl;
+	gsout<<tx2<<","<<ty2<<gsnl; */
+
+	return s;
+}
+
+double gs_external_tangents ( double c1x, double c1y, double r1, double c2x, double c2y, double r2, 
+							  double& t1x, double& t1y, double& t2x, double& t2y,
+							  double& t3x, double& t3y, double& t4x, double& t4y )
+{
+	double s, r, vx, vy;
+	if ( r1==r2 )
+	{	s = sqrt(gsdist2(c1x,c1y,c2x,c2y));
+		if ( s==0 ) return -1;
+		vy =  ((c2x-c1x)/s)*r1; // ortho vector
+		vx = -((c2y-c1y)/s)*r1; 
+		t1x=c1x-vx; t1y=c1y-vy; t2x=c2x-vx; t2y=c2y-vy;
+		t3x=c1x+vx; t3y=c1y+vy; t4x=c2x+vx; t4y=c2y+vy;
+	}
+	else if ( r1>r2 )
+	{	r = r1-r2;
+		s = gs_tangent ( c2x, c2y, c1x, c1y, r, t1x, t1y, t3x, t3y ); // (p,c,t1):CCW, (p,c,t2):CW
+		if ( s<0 ) return -1;
+		vx = ((t1x-c1x)/r)*r2;
+		vy = ((t1y-c1y)/r)*r2;
+		t1x+=vx; t1y+=vy; t2x=c2x+vx; t2y=c2y+vy; // (c1,t1,c2) is CCW
+		vx = ((t3x-c1x)/r)*r2;
+		vy = ((t3y-c1y)/r)*r2;
+		t3x+=vx; t3y+=vy; t4x=c2x+vx; t4y=c2y+vy; // (c1,t3,c2) is CW
+	}
+	else // r2>r1
+	{	r = r2-r1;
+		s = gs_tangent ( c1x, c1y, c2x, c2y, r, t4x, t4y, t2x, t2y ); // (p,c,t1):CCW, (p,c,t2):CW
+		if ( s<0 ) return -1;
+		vx = ((t4x-c2x)/r)*r1;
+		vy = ((t4y-c2y)/r)*r1;
+		t4x+=vx; t4y+=vy; t3x=c1x+vx; t3y=c1y+vy;
+		vx = ((t2x-c2x)/r)*r1;
+		vy = ((t2y-c2y)/r)*r1;
+		t2x+=vx; t2y+=vy; t1x=c1x+vx; t1y=c1y+vy;
+	}
+	return s;
+}
+
+double gs_internal_tangents ( double c1x, double c1y, double r1, double c2x, double c2y, double r2, 
+							  double& t1x, double& t1y, double& t2x, double& t2y,
+							  double& t3x, double& t3y, double& t4x, double& t4y )
+{
+	double s, r, vx, vy;
+	r = r1+r2;
+	s = gs_tangent ( c2x, c2y, c1x, c1y, r, t1x, t1y, t3x, t3y ); // (p,c,t1):CCW, (p,c,t2):CW
+	if ( s<0 ) return -1;
+	vx = ((c1x-t1x)/r)*r2;
+	vy = ((c1y-t1y)/r)*r2;
+	t1x+=vx; t1y+=vy; t2x=c2x+vx; t2y=c2y+vy;
+	vx = ((c1x-t3x)/r)*r2;
+	vy = ((c1y-t3y)/r)*r2;
+	t3x+=vx; t3y+=vy; t4x=c2x+vx; t4y=c2y+vy;
+	return s;
+}
+
 //=============================== End of File ======================================

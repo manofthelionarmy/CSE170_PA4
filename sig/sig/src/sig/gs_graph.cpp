@@ -10,6 +10,11 @@
 # include <sig/gs_string.h>
 # include <sig/gs_heap.h>
 
+//xxx
+# define GS_USE_TRACE1 // Node operations
+# define GS_USE_TRACE2 // Search
+# include <sig/gs_trace.h>
+
 //============================== GsGraphNode =====================================
 
 GsGraphNode::GsGraphNode ()
@@ -37,19 +42,38 @@ GsGraphLink* GsGraphNode::linkto ( GsGraphNode* n, float cost )
 	return l;
 }
 
-void GsGraphNode::unlink ( int ni )
+void GsGraphNode::unlink ()
+{
+	GS_TRACE1 ( "GsGraphNode::unlink..." );
+
+	GsManagerBase* lman = _graph->link_class_manager();
+	while ( _links.size() )
+	{	GsGraphNode* n = _links.top()->node();
+		// remove link this => n:
+		lman->free ( _links.pop() );
+		// remove link n => this
+		int lnt = n->search_link(this);
+		if ( lnt>=0 )
+		{	lman->free ( n->_links[lnt] );
+			n->_links[lnt] = n->_links.pop(); // fast remove
+		}
+	}
+	GS_TRACE1 ( "Done." );
+}
+
+void GsGraphNode::unlink ( int li )
 {
 	GsManagerBase* lman = _graph->link_class_manager();
-	lman->free ( _links[ni] );
-	_links[ni] = _links.pop();
+	lman->free ( _links[li] );
+	_links[li] = _links.pop();
 }
 
 int GsGraphNode::search_link ( GsGraphNode* n ) const
 {
 	int i;
-	for ( i=0; i<_links.size(); i++ )
+	for ( i=_links.size()-1; i>=0; i-- )
 		if ( _links[i]->node()==n ) return i;
-	return -1;
+	return i;
 }
 
 void GsGraphNode::output ( GsOutput& o ) const
@@ -89,8 +113,8 @@ class GsGraphPathTree
 {  public :
 	struct Node { int parent; float cost; GsGraphNode* node; };
 	struct Leaf { int l; int d; }; // the leaf index in nodes array, and its depth
-	GsArray<Node> nodes;
-	GsHeap<Leaf,float> leafs;
+	GsArray<Node> N;
+	GsHeap<Leaf,float> Q;
 	GsGraphBase* graph;
 	GsGraphNode* closest;
 	int iclosest;
@@ -101,61 +125,68 @@ class GsGraphPathTree
 
    public :
 	GsGraphPathTree ()
-	 { bidirectional_block = false;
-	 }
+	{	bidirectional_block = false;
+	}
 
 	void init ( GsGraphBase* g, GsGraphNode* n )
-	 { nodes.size(1);
-	   nodes[0].parent = -1;
-	   nodes[0].cost = 0;
-	   nodes[0].node = n;
-	   Leaf l;
-	   l.l = l.d = 0;
-	   leafs.insert ( l, 0 );
-	   graph = g;
-	   distfunc=0;
-	   udata = 0;
-	   closest = 0;
-	   iclosest = 0;
-	   cdist = 0;
-	 }
+	{	N.size(1);
+		N[0].parent = -1;
+		N[0].cost = 0;
+		N[0].node = n;
+		Leaf l;
+		l.l = l.d = 0;
+		Q.init ();
+		Q.insert ( l, 0 );
+		graph = g;
+		distfunc = 0;
+		udata = 0;
+		closest = 0;
+		iclosest = 0;
+		cdist = 0;
+	}
 
-	bool has_leaf ()
-	 { return leafs.size()==0? false:true;
-	 }
+	bool has_leaf () const { return Q.size()>=0; }
 
 	bool expand_lowest_cost_leaf ( GsGraphNode* goalnode )
-	 { int i;
-	   int n = leafs.top().l;
-	   int d = leafs.top().d;
-	   leafs.remove ();
-	   GsGraphNode* node = nodes[n].node;
-	   Leaf leaf;
-	   const GsArray<GsGraphLink*>& a = node->links();
-	   for ( i=0; i<a.size(); i++ )
-		{ //gsout<<a.size()<<gsnl;
-		  if ( graph->marked(a[i]) ||
-			   a[i]->blocked() ||
-			   a[i]->node()->blocked() ) continue;
-		  if ( bidirectional_block )
-		   { if ( a[i]->node()->link(node)->blocked() ) continue; }
-		  nodes.push();
-		  nodes.top().parent = n;
-		  nodes.top().cost = nodes[n].cost + a[i]->cost();
-		  nodes.top().node = a[i]->node();
-		  leaf.l = nodes.size()-1;
-		  leaf.d = d+1;
-		  leafs.insert ( leaf, nodes.top().cost );
-		  graph->mark ( a[i] );
-		  if ( distfunc )
-		   { float d = distfunc ( nodes.top().node, goalnode, udata );
-			 if ( !closest || d<cdist )
-			  { closest=nodes.top().node; iclosest=nodes.size()-1; cdist=d; }
-		   }
-		  if ( a[i]->node()==goalnode ) return true;
+	{	int n = Q.top().l;
+		int nextd = Q.top().d+1;
+		Q.remove ();
+		GsGraphNode* node = N[n].node;
+		Leaf leaf;
+		const GsArray<GsGraphLink*>& a = node->links();
+		for ( int i=0,s=a.size(); i<s; i++ )
+		{	//gsout<<a.size()<<gsnl;//xxx
+			GsGraphLink* li = a[i];
+			GsGraphNode* lin = li->node();
+			if ( graph->marked(li) || li->blocked() || lin->blocked() ) continue;
+			if ( bidirectional_block && lin->link(node)->blocked() ) continue;
+			N.push();
+			N.top().parent = n;
+			N.top().cost = N[n].cost + li->cost();
+			N.top().node = lin;
+			leaf.l = N.size()-1;
+			leaf.d = nextd;
+			Q.insert ( leaf, N.top().cost );
+			graph->mark ( li );
+			if ( distfunc )
+			{	float d = distfunc ( N.top().node, goalnode, udata );
+				if ( !closest || d<cdist )
+				{	closest=N.top().node; iclosest=N.size()-1; cdist=d; }
+			}
+			if ( li->node()==goalnode ) return true;
 		}
-	   return false;
+		return false;
 	 }
+
+	float make_path ( int i, GsArray<GsGraphNode*>& path )
+	{	float cost = N[i].cost;   
+		path.size(0);
+		while ( i>=0 )
+		{	path.push() = N[i].node;
+			i = N[i].parent;
+		}
+		return cost;
+	}
 };
 
 //============================== GsGraphBase ===============================================
@@ -214,90 +245,98 @@ int GsGraphBase::num_links () const
 
 //----------------------------------- marking --------------------------------
 
-void GsGraphBase::begin_marking ()
+static void _errormsg ( const char* s1, int code )
 {
-	if ( _mark_status!=MARKFREE ) gsout.fatal("GsGraphBase::begin_mark() is locked!");
+	const char* s2= code==0? "is locked" :
+					code==1? "marking is not active" :
+					code==2? "indexing is not active" : "error";
+	gsout.fatal ( "GsGraphBase::%s: %s!", s1, s2 );
+}
+
+void GsGraphBase::begin_marking () const
+{
+	if ( _mark_status!=MARKFREE ) _errormsg("begin_mark()",0);
 	_mark_status = MARKING;
 	if ( _curmark==gsuintmax ) _normalize_mark ();
 	else _curmark++;
 }
 
-void GsGraphBase::end_marking ()
+void GsGraphBase::end_marking () const
 {
 	_mark_status=MARKFREE;
 }
 
-bool GsGraphBase::marked ( GsGraphNode* n ) 
+bool GsGraphBase::marked ( GsGraphNode* n ) const
 {
-	if ( _mark_status!=MARKING ) gsout.fatal ( "GsGraphBase::marked(n): marking is not active!\n" );
+	if ( _mark_status!=MARKING ) _errormsg("marked(n)",1);
 	return n->_index==_curmark? true:false;
 }
 
-void GsGraphBase::mark ( GsGraphNode* n ) 
+void GsGraphBase::mark ( GsGraphNode* n ) const
 { 
-	if ( _mark_status!=MARKING ) gsout.fatal ( "GsGraphBase::mark(n): marking is not active!\n" );
+	if ( _mark_status!=MARKING ) _errormsg("mark(n)",1);
 	n->_index = _curmark;
 }
 
-void GsGraphBase::unmark ( GsGraphNode* n ) 
+void GsGraphBase::unmark ( GsGraphNode* n ) const
 {
-	if ( _mark_status!=MARKING ) gsout.fatal ( "GsGraphBase::unmark(n): marking is not active!\n");
+	if ( _mark_status!=MARKING ) _errormsg("unmark(n)",1);
 	n->_index = _curmark-1;
 }
 
-bool GsGraphBase::marked ( GsGraphLink* l ) 
+bool GsGraphBase::marked ( GsGraphLink* l ) const
 {
-	if ( _mark_status!=MARKING ) gsout.fatal ( "GsGraphBase::marked(l): marking is not active!\n" );
+	if ( _mark_status!=MARKING ) _errormsg("marked(l)",1);
 	return l->_index==_curmark? true:false;
 }
 
-void GsGraphBase::mark ( GsGraphLink* l ) 
+void GsGraphBase::mark ( GsGraphLink* l ) const
 { 
-	if ( _mark_status!=MARKING ) gsout.fatal ( "GsGraphBase::mark(l): marking is not active!\n" );
+	if ( _mark_status!=MARKING ) _errormsg("mark(l)",1);
 	l->_index = _curmark;
 }
 
-void GsGraphBase::unmark ( GsGraphLink* l ) 
+void GsGraphBase::unmark ( GsGraphLink* l ) const
 {
-	if ( _mark_status!=MARKING ) gsout.fatal ( "GsGraphBase::unmark(l): marking is not active!\n");
+	if ( _mark_status!=MARKING ) _errormsg("unmark(l)",1);
 	l->_index = _curmark-1;
 }
 
 //----------------------------------- indexing --------------------------------
 
-void GsGraphBase::begin_indexing ()
+void GsGraphBase::begin_indexing () const
 {
-	if ( _mark_status!=MARKFREE ) gsout.fatal("GsGraphBase::begin_indexing() is locked!");
+	if ( _mark_status!=MARKFREE ) _errormsg("begin_indexing()",0);
 	_mark_status = INDEXING;
 }
 
-void GsGraphBase::end_indexing ()
+void GsGraphBase::end_indexing () const
 {
-	_normalize_mark ();
+	_normalize_mark();
 	_mark_status=MARKFREE;
 }
 
-gsuint GsGraphBase::index ( GsGraphNode* n )
+gsuint GsGraphBase::index ( GsGraphNode* n ) const
 {
-	if ( _mark_status!=INDEXING ) gsout.fatal ("GsGraphBase::index(n): indexing is not active!");
+	if ( _mark_status!=INDEXING ) _errormsg("index(n)",2);
 	return n->_index;
 }
 
-void GsGraphBase::index ( GsGraphNode* n, gsuint i )
+void GsGraphBase::index ( GsGraphNode* n, gsuint i ) const
 {
-	if ( _mark_status!=INDEXING ) gsout.fatal ("GsGraphBase::index(n,i): indexing is not active!");
+	if ( _mark_status!=INDEXING ) _errormsg("index(n,i)",2);
 	n->_index = i;
 }
 
-gsuint GsGraphBase::index ( GsGraphLink* l )
+gsuint GsGraphBase::index ( GsGraphLink* l ) const
 {
-	if ( _mark_status!=INDEXING ) gsout.fatal ("GsGraphBase::index(l): indexing is not active!");
+	if ( _mark_status!=INDEXING ) _errormsg("index(l)",2);
 	return l->_index;
 }
 
-void GsGraphBase::index ( GsGraphLink* l, gsuint i )
+void GsGraphBase::index ( GsGraphLink* l, gsuint i ) const
 {
-	if ( _mark_status!=INDEXING ) gsout.fatal ("GsGraphBase::index(l,i): indexing is not active!");
+	if ( _mark_status!=INDEXING ) _errormsg("index(l,i)",2);
 	l->_index = i;
 }
 
@@ -324,8 +363,7 @@ void GsGraphBase::remove_node ( GsGraphNode* n )
 
 int GsGraphBase::remove_link ( GsGraphNode* n1, GsGraphNode* n2 )
 {
-	int i;
-	int n=0;
+	int i, n=0;
 
 	while ( true )
 	{	i = n1->search_link(n2);
@@ -460,17 +498,21 @@ void GsGraphBase::get_disconnected_components ( GsArray<int>& components, GsArra
 
 //----------------------------------- shortest path ----------------------------------
 
-float GsGraphBase::get_short_path ( GsGraphNode* n1,
-									GsGraphNode* n2,
-									GsArray<GsGraphNode*>& path,
-									float (*distfunc) ( const GsGraphNode*, const GsGraphNode*, void* udata ),
-									void* udata )
+bool GsGraphBase::search_path
+				 ( GsGraphNode* n1, GsGraphNode* n2, GsArray<GsGraphNode*>& path, float& cost,
+				   float (*distfunc) ( const GsGraphNode*, const GsGraphNode*, void* udata ),
+				   void* udata )
 {
+	GS_TRACE2 ( "search_shortest_path starting..." );
 	path.size(0);
-	if ( n1==n2 ) { path.push()=n1; return 0; }
+
+	if ( n1==n2 )
+	{	GS_TRACE2 ( "n1==n2." );
+		path.push()=n1;
+		return 0;
+	}
 
 	begin_marking ();
-
 	if ( !_pt ) _pt = new GsGraphPathTree;
 	_pt->init ( this, n2 );
 
@@ -478,44 +520,32 @@ float GsGraphBase::get_short_path ( GsGraphNode* n1,
 	{	_pt->distfunc = distfunc;
 		_pt->udata = udata;
 	}
-
-	int i;
-	bool end = false;
-
-	while ( !end )
-	{	if ( !_pt->has_leaf() )
-		{	end_marking();
-			if ( !distfunc ) return 0;
-			i = _pt->iclosest;
-			float cost = _pt->nodes[i].cost;   
-			while ( i>=0 )
-			{	path.push () = _pt->nodes[i].node;
-				i = _pt->nodes[i].parent;
-			}
-			return cost;
-		}
-		end = _pt->expand_lowest_cost_leaf ( n1 );
+//xxx
+	GS_TRACE2 ( "searching..." );
+	while ( _pt->has_leaf() )
+	{	if ( _pt->expand_lowest_cost_leaf(n1) ) break;
 	}
-
 	end_marking ();
 
-	i = _pt->nodes.size()-1; // last element is n1
-	float cost = _pt->nodes[i].cost;   
-	while ( i>=0 )
-	{	path.push () = _pt->nodes[i].node;
-		i = _pt->nodes[i].parent;
+	if ( _pt->N.top().node==n1 ) // found
+	{	cost = _pt->make_path ( _pt->N.size()-1, path );
+		GS_TRACE2 ( "Found! size:"<<path.size()<<" cost:"<<cost );
+		return true;
 	}
-
-	return cost;
+	else if ( distfunc) // not found but closest goal available
+	{	GS_TRACE2 ( "Closest returned." );
+		cost = _pt->make_path ( _pt->iclosest, path );
+		return false;
+	}
+	else // not found
+	{	GS_TRACE2 ( "Not Found." );
+		cost = 0;
+		return false;
+	}
 }
 
-bool GsGraphBase::local_search 
-				  ( GsGraphNode* startn,
-					GsGraphNode* endn,
-					int    maxdepth,
-					float  maxdist,
-					int&   depth,
-					float& dist )
+bool GsGraphBase::local_search ( GsGraphNode* startn, GsGraphNode* endn,
+								int maxdepth, float maxdist, int& depth, float& dist )
 {
 	depth=0;
 	dist=0;
@@ -533,8 +563,8 @@ bool GsGraphBase::local_search
 	while ( !end )
 	{	if ( !_pt->has_leaf() ) { not_found=true; break; } // not found!
 
-		dist = _pt->nodes[_pt->leafs.top().l].cost;
-		depth = _pt->leafs.top().d;
+		dist = _pt->N[_pt->Q.top().l].cost;
+		depth = _pt->Q.top().d;
 
 		if ( maxdepth>0 && depth>maxdepth ) { break; } // max depth reached
 		if ( maxdist>0 && dist>maxdist ) { break; }	// max dist reached
@@ -556,7 +586,7 @@ void GsGraphBase::bidirectional_block_test ( bool b )
 
 //------------------------------------- I/O --------------------------------
 
-void GsGraphBase::output ( GsOutput& o )
+void GsGraphBase::output ( GsOutput& o ) const
 {
 	GsListIterator<GsGraphNode> it(_nodes);
 	GsManagerBase* nman = node_class_manager();
@@ -651,7 +681,7 @@ void GsGraphBase::input ( GsInput& inp )
 //---------------------------- private methods --------------------------------
 
 // set all indices (nodes and links) to 0 and curmark to 1
-void GsGraphBase::_normalize_mark()
+void GsGraphBase::_normalize_mark() const
 {
 	int i;
 	GsGraphNode* n;

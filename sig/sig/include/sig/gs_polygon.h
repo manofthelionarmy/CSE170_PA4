@@ -52,6 +52,9 @@ class GsPolygon : public GsArray<GsPnt2>
 		Optional parameter open sets the boolean open state and is false by default. */
 	void setpoly ( const float* pt, int numv, bool open=false );
 
+	/*! Defines the polygon from a string of coordinates */
+	void setpoly ( const char* st, bool open=false );
+
 	/*! Returns true if the polygon is convex */
 	bool convex () const;
 
@@ -147,8 +150,10 @@ class GsPolygon : public GsArray<GsPnt2>
 	void get_bounding_box ( float& minx, float& miny, float& maxx, float& maxy ) const;
 
 	/*! Same as the other get_bounding_box() method, but with GsVec2 arguments */
-	void get_bounding_box ( GsVec2& min, GsVec2& max ) const
-		 { get_bounding_box(min.x,min.y,max.x,max.y); } 
+	void get_bounding_box ( GsVec2& min, GsVec2& max ) const { get_bounding_box(min.x,min.y,max.x,max.y); } 
+
+	/*! Get the centroid c and the radius r of the minimum containing disk centered at c */
+	void get_bounding_disk ( GsPnt2& c, float& r ) const;
 
 	/*! Get the polygon configuration. x,y is the centroid, and a is the angle
 		between the centroid and the vertex 0, in the range [0,2pi) */
@@ -157,6 +162,23 @@ class GsPolygon : public GsArray<GsPnt2>
 	/*! Puts the polygon in the configuration (x,y,a): x,y is the centroid, and
 		a is the angle between the centroid and the vertex 0, in the range [0,2pi) */
 	void set_configuration ( float x, float y, float a );
+
+    /*! Computes vertices aproximating a circle arc and pushes the vertices to the
+        current polygon. The arc is computed by interpolating from vector v1 to v2,
+        around center c. It is assumed that v2 is counter clockwise in respect to v1
+        around c, and dang (radians) is the angle increment for the aproximation.
+        The sign of dang may be set negative to invert the orientation of the arc.
+        Sampled points are farther away from the center than the ideal circle radius,
+        in order to ensure that the approximation is no smaller than the ideal circle; 
+        If limv is given, it will limit the arc to not pass vector limv. */
+    void arc ( const GsPnt2& c, const GsVec2& v1, const GsVec2& v2, float radius, float dang, const GsVec2* limv=0 );
+
+    /*! Makes this polygon to delimit the region of distance radius to p;
+        dang (radians) is the angle increment to aproximate curved sections.
+        The given polygon must be in ccw orientation and not have duplicate points.
+        Closed and open polygons are correctly handled but not self-intersections 
+        in the resulting polygon. */
+    void inflate ( const GsPolygon& p, float radius, float dang );
 
 	/*! Outputs the open flag and calls GsArray::operator<< */
 	friend GsOutput& operator<< ( GsOutput& out, const GsPolygon& p );

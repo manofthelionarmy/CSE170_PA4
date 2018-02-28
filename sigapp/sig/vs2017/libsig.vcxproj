@@ -202,6 +202,7 @@
     <ClCompile Include="..\src\sig\gs_vars.cpp" />
     <ClCompile Include="..\src\sig\gs_vec.cpp" />
     <ClCompile Include="..\src\sig\gs_vec2.cpp" />
+    <ClCompile Include="..\src\sig\gs_vis_graph.cpp" />
     <ClCompile Include="..\src\sig\sa_action.cpp" />
     <ClCompile Include="..\src\sig\sa_bbox.cpp" />
     <ClCompile Include="..\src\sig\sa_eps_export.cpp" />
@@ -292,6 +293,7 @@
     <ClInclude Include="..\include\sig\gs_vars.h" />
     <ClInclude Include="..\include\sig\gs_vec.h" />
     <ClInclude Include="..\include\sig\gs_vec2.h" />
+    <ClInclude Include="..\include\sig\gs_vis_graph.h" />
     <ClInclude Include="..\include\sig\sa_action.h" />
     <ClInclude Include="..\include\sig\sa_bbox.h" />
     <ClInclude Include="..\include\sig\sa_eps_export.h" />

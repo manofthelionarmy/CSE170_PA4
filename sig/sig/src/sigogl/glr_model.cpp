@@ -78,12 +78,12 @@ void GlrModel::render (  SnShape* s, GlContext* c )
 	// 1. Set programs based on rendering mode
 	gsRenderMode rm = s->render_mode();
 	switch ( rm )
-	{ case gsRenderModeDefault : p=pGour; c->polygon_mode_fill(); GS_TRACE4("Prog: Gouraud"); break;
-	  case gsRenderModePhong   : p=pPhong; c->polygon_mode_fill(); GS_TRACE4("Prog: Phong"); break;
-	  case gsRenderModeGouraud : p=pGour; c->polygon_mode_fill(); GS_TRACE4("Prog: Gouraud"); break;
-	  case gsRenderModeFlat	   : p=pFlat; c->polygon_mode_fill(); GS_TRACE4("Prog: Flat"); break;
-	  case gsRenderModeLines   : p=pGour; c->polygon_mode_line(); GS_TRACE4("Prog: Gouraud"); break;
-	  case gsRenderModePoints  : p=pFlat; c->polygon_mode_point(); GS_TRACE4("Prog: Flat"); break;
+	{	case gsRenderModeDefault: p=pGour; c->polygon_mode_fill(); GS_TRACE4("Prog: Gouraud"); break;
+		case gsRenderModePhong  : p=pPhong; c->polygon_mode_fill(); GS_TRACE4("Prog: Phong"); break;
+		case gsRenderModeGouraud: p=pGour; c->polygon_mode_fill(); GS_TRACE4("Prog: Gouraud"); break;
+		case gsRenderModeFlat	: p=pFlat; c->polygon_mode_fill(); GS_TRACE4("Prog: Flat"); break;
+		case gsRenderModeLines  : p=pGour; c->polygon_mode_line(); GS_TRACE4("Prog: Gouraud"); break;
+		case gsRenderModePoints : p=pFlat; c->polygon_mode_point(); GS_TRACE4("Prog: Flat"); break;
 	}
 
 	gscbool textured = m.textured;
@@ -94,7 +94,7 @@ void GlrModel::render (  SnShape* s, GlContext* c )
 	// SnColorSurf will use 2 possible modes: Smooth,PerVertexMtl or Faces,PerVertexColor
 	if ( textured )
 	{	GS_TRACE4 ( "Textured..." );
-		p=pText; 
+		p=pText;
 	}
 	else if ( mtlmode==GsModel::PerVertexMtl || mtlmode==GsModel::PerFaceMtl )
 	{	GS_TRACE4 ( "MtlMode: PerVertexMtl or PerFaceMtl..." );
@@ -213,20 +213,31 @@ void GlrModel::render (  SnShape* s, GlContext* c )
 	else if ( mtlmode==GsModel::PerGroupMtl )
 	{	glUniform3fv ( p->uniloc[2], 1, c->light.position.e );
 		glUniform3fv ( p->uniloc[3], 3, c->light.encode_intensities(buf) );
+		glUniform1i  ( p->uniloc[6], 0 ); // set mode to textured
+		const int gsize = m.G.size();
+
+		# define DRAW_GROUP_TRIANGLES(M,G) \
+			glUniform3fv ( p->uniloc[4], 4, M.encode_colors(buf) ); \
+			glUniform1fv ( p->uniloc[5], 2, M.encode_params(buf) ); \
+			glDrawArrays ( GL_TRIANGLES, G.fi*3, G.fn*3 )
+
 		if ( _normalspervertex )
 		{	GS_TRACE4 ( "Drawing per-vertex smooth, grouped materials" );
-			for ( int g=0; g<m.G.size(); g++ )
-			{	glUniform3fv ( p->uniloc[4], 4, m.M[g].encode_colors(buf) );
-				glUniform1fv ( p->uniloc[5], 2, m.M[g].encode_params(buf) );
-				glDrawElements ( GL_TRIANGLES, m.F.size()*3, GL_UNSIGNED_INT, m.F.pt() );
-				// consider using glDrawArrays?
-				// glDrawArrays ( GL_TRIANGLES, G.fi*3, G.fn*3 );
+			for ( int g=0; g<gsize; g++ )
+			{	GsModel::Group& G=m.G[g];
+				GsMaterial& M=m.M[g];
+				glUniform3fv ( p->uniloc[4], 4, M.encode_colors(buf) );
+				glUniform1fv ( p->uniloc[5], 2, M.encode_params(buf) );
+				glDrawElements ( GL_TRIANGLES, G.fn*3, GL_UNSIGNED_INT, &m.F[G.fi].a );
 			}
 		}
 		else if ( textured ) // per-group with textures
 		{	GS_TRACE4 ( "Drawing per-face shading, grouped materials with textures" );
-			for ( int g=0; g<m.G.size(); g++ )
+			glUniform1i ( p->uniloc[6], 0 ); // Mode 0 is with texture
+			glUniform1i ( p->uniloc[7], 0 ); // Tell to use sampler for texture unit 0
+			for ( int g=0; g<gsize; g++ )
 			{	GsModel::Group& G=m.G[g];
+				GsMaterial& M=m.M[g];
 				if ( G.dmap ) // has diffuse texture
 				{	if ( G.dmap->id<0 ) // need to declare texture
 					{	G.dmap->id = GlResources::declare_texture(G.dmap->fname,G.dmap->fname);
@@ -237,23 +248,25 @@ void GlrModel::render (  SnShape* s, GlContext* c )
 					const GlTexture* t = GlResources::get_texture ( G.dmap->id );
 					glActiveTexture ( GL_TEXTURE0 + 0 );	// Only using texture unit 0
 					glBindTexture ( GL_TEXTURE_2D, t->id ); // Bind image
-					glUniform1i ( p->uniloc[6], 0 ); // Tell to use sampler for texture unit 0
+					DRAW_GROUP_TRIANGLES(M,G);
 				}
-				glUniform3fv ( p->uniloc[4], 4, m.M[g].encode_colors(buf) );
-				glUniform1fv ( p->uniloc[5], 2, m.M[g].encode_params(buf) );
-				glDrawArrays ( GL_TRIANGLES, G.fi*3, G.fn*3 );
+				else
+				{	glUniform1i ( p->uniloc[6], 1 ); // set mode to no texture
+					DRAW_GROUP_TRIANGLES(M,G);
+					glUniform1i ( p->uniloc[6], 0 ); // set mode back to textured
+				}
 			}
 			glBindTexture ( GL_TEXTURE_2D, 0 );
 		}
 		else // per-group no textures
 		{	GS_TRACE4 ( "Drawing per-face shading, grouped materials" );
-			for ( int g=0; g<m.G.size(); g++ )
+			for ( int g=0; g<gsize; g++ )
 			{	GsModel::Group& G=m.G[g];
-				glUniform3fv ( p->uniloc[4], 4, m.M[g].encode_colors(buf) );
-				glUniform1fv ( p->uniloc[5], 2, m.M[g].encode_params(buf) );
-				glDrawArrays ( GL_TRIANGLES, G.fi*3, G.fn*3 );
+				GsMaterial& M=m.M[g];
+				DRAW_GROUP_TRIANGLES(M,G);
 			}
 		}
+		# undef DRAW_GROUP_TRIANGLES
 	}
 	else if ( m.mtlmode()==GsModel::PerVertexMtl || m.mtlmode()==GsModel::PerFaceMtl )
 	{	glUniform3fv ( p->uniloc[2], 1, c->light.position.e );

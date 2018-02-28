@@ -164,15 +164,15 @@ void transbarycentric ( GsPnt& a, GsPnt& b, GsPnt& c, const GsVec &k, const GsVe
  }
 
 int GsVec::compare ( const GsVec& v1, const GsVec& v2 )
- {
-   if ( v1.x > v2.x ) return  1;
-   if ( v1.x < v2.x ) return -1;
-   if ( v1.y > v2.y ) return  1;
-   if ( v1.y < v2.y ) return -1;
-   if ( v1.z > v2.z ) return  1;
-   if ( v1.z < v2.z ) return -1;
-   return 0;
- }
+{
+	if ( v1.x > v2.x ) return  1;
+	if ( v1.x < v2.x ) return -1;
+	if ( v1.y > v2.y ) return  1;
+	if ( v1.y < v2.y ) return -1;
+	if ( v1.z > v2.z ) return  1;
+	if ( v1.z < v2.z ) return -1;
+	return 0;
+}
 
 //================================== End of File ===========================================
 

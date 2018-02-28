@@ -75,13 +75,13 @@ class GsBuffer
 	void setall ( const X& x )
 	 { int i; for ( i=0; i<_size; i++ ) ((X*)_data)[i]=x; }
 
-	/*! Returns a valid index as if the given index references a circular
-		array, ie, it returns index%size() for positive numbers. Negative
-		numbers are also correctly mapped. */
-	int vid ( int index )
-	 { if ( index<0 ) index += _size * ( -index/_size + 1 );
-	   return index%_size;
-	 }
+	/*! Returns a valid index from an index that may be out of bounds by assuming it
+		refers to a circular mapping, ie, it returns index%size() for positive numbers;
+		and negative numbers are also correctly mapped. */
+	int vid ( int index ) const { if (index<0) index=_size-(-index%_size); return index%_size; }
+
+	/*! Validate a positive index by returning index%size(). */
+	int vidpos ( int index ) const { return index%_size; }
 
 	/*! Gets a const reference to the element of index i. Indices start from 0 and must 
 		be smaller than size(). No checkings are done to ensure that i is valid. */

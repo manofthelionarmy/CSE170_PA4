@@ -25,10 +25,10 @@
 	data is required, which must be a class deriving GsListNode. */
 class GsListBase
  { private :
-	GsListNode* _first;	   // first element
-	GsListNode* _cur;		 // current element
+	GsListNode* _first;	 // first element
+	mutable GsListNode* _cur; // current element
 	GsManagerBase* _man; // manager of user data, that derives GsListNode
-	int _elements;			// the number of elements in the list
+	int _elements;		 // the number of elements in the list
 
    public :
 
@@ -89,18 +89,18 @@ class GsListBase
 	void last ( GsListNode* n ) { _first = n->next(); }
 
 	/*! Puts the current position cur() pointing to the first node. */
-	void gofirst () { _cur=_first; }
+	void gofirst () const { _cur=_first; }
 
 	/*! Puts the current position cur() pointing to the last node. */
-	void golast () { if (_first) _cur=_first->prior(); }
+	void golast () const { if (_first) _cur=_first->prior(); }
 
 	/*! Puts the current position cur() pointing to the next node curnext(); 
 		Attention: this method cannot be called if the list is empty! */
-	void gonext () { _cur=_cur->next(); }
+	void gonext () const { _cur=_cur->next(); }
 
 	/*! Puts the current position cur() pointing to the prior node curprior();
 		Attention: this method cannot be called if the list is empty! */
-	void goprior () { _cur=_cur->prior(); }
+	void goprior () const { _cur=_cur->prior(); }
 
 	/*! Returns the next element of the current position cur().
 		Attention: this method cannot be called if the list is empty! */
@@ -118,7 +118,7 @@ class GsListBase
 			  } while ( l.notlast() );
 		 } \endcode
 		Attention: this method cannot be called if the list is empty! */
-	bool notlast () { gonext();  return _cur==_first? false:true; }
+	bool notlast () const { gonext();  return _cur!=_first; }
 
 	/*! This method calls goprior(), and returns true iff the first element was not reached.
 		Use this to iterate over a hole list in backwards, like : \code 
@@ -128,7 +128,7 @@ class GsListBase
 			  } while ( l.notfirst() );
 		 } \endcode
 		Attention: this method cannot be called if the list is empty! */
-	bool notfirst () { goprior(); return _cur->next()==_first? false:true; }
+	bool notfirst () { goprior(); return _cur->next()!=_first; }
 
 	/*! Returns true iff the current position is pointing to the last element.
 		Attention: this method cannot be called if the list is empty! */

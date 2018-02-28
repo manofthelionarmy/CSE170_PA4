@@ -42,6 +42,15 @@ void GsPolygon::setpoly ( const float* pt, int numv, bool open )
 	_open = open;
 }
 
+void GsPolygon::setpoly ( const char* values, bool open )
+{
+	size(0);
+	GsInput inp;
+	inp.init(values);
+	inp>>*this;
+	_open = open;
+}
+
 bool GsPolygon::convex () const
 {
 	int n, i, i1, i2;
@@ -262,7 +271,7 @@ void GsPolygon::remove_collinear_vertices ( float epsilon )
 GsVec2 GsPolygon::centroid () const
 {
 	GsVec2 c;
-	for ( int i=0; i<size(); i++ ) c += get(i);
+	for ( int i=0, s=size(); i<s; i++ ) c += get(i);
 	c /= (float)size();
 	return c;
 }
@@ -505,6 +514,176 @@ void GsPolygon::get_bounding_box ( float& minx, float& miny, float& maxx, float&
 	for ( i=1; i<s; i++ )
 	{	GS_UPDMIN ( minx, get(i).x ); GS_UPDMAX ( maxx, get(i).x );
 		GS_UPDMIN ( miny, get(i).y ); GS_UPDMAX ( maxy, get(i).y );
+	}
+}
+
+void GsPolygon::get_bounding_disk ( GsPnt2& c, float& r ) const
+{
+	c = centroid ();
+	float d, dmax2=0;
+	int s=size();
+	for ( int i=0; i<s; i++ )
+	{	d = dist2 ( c, get(i) );
+		if ( d>dmax2 ) dmax2=d; 
+	}
+	r = sqrtf(dmax2);
+}
+
+void GsPolygon::arc ( const GsPnt2& c, const GsVec2& v1, const GsVec2& v2, float radius, float dang, const GsVec2* limv )
+{
+	double lccw=0;
+	GsVec2 la, lb;
+	if ( limv ) { la=c+v1; lb=c+*limv; lccw=::ccw(la,lb,c); }
+
+	GsVec2 n1=v1; n1.len(radius);
+	GsVec2 n2=v2; n2.len(radius);
+	float ang = angle(n1,n2);
+	bool inv=false;
+	if ( dang<0 ) { inv=true; dang=-dang; }
+
+	int i, n = 1+(int)(ang/dang);
+	if ( n==1 )
+	{	dang=ang; }
+	else
+	{	dang += (ang-(float(n)*dang))/float(n); }
+
+	GS_TRACE2 ( "Arc: n="<<n<<" dang="<<GS_TODEG(dang)<<"degs" );
+
+	float f = cosf(dang/2.0f);
+	n1/=f; n2/=f; // new len: r/cos(a/2)
+	push() = c+n1;
+	if (inv) dang=-dang;;
+	float Sa = sinf(dang);
+	float Ca = cosf(dang);
+	for ( i=1; i<=n; i++ )
+	{	if ( i==n )
+		{	push() = c+n2; } // make last one exact
+		else
+		{	n1.rot(Sa,Ca);
+			push() = c+n1;
+		}
+		if (limv) 
+		if ( ::ccw(la,lb,top())*lccw<0 ) // passed limit, correct!
+		{	n2=pop();
+			n1=top();
+			segments_intersect ( la, lb, n1, n2, top() );
+			break;
+		}
+	}
+}
+
+static void addconv ( int i, GsPolygon& p, const GsPnt2& a, const GsPnt2& b, const GsPolygon& path, float radius, float dang )
+{
+	GsPnt2 lp = p.top();
+	//p.push ( lp ); p.push ( path[i-1] ); p.push ( a ); // to debug
+	p.pop();
+	p.arc ( path[i-1], lp-path[i-1], a-path[i-1], radius, dang );
+	p.push() = b;
+}
+
+static void addconc ( int /*i*/, GsPolygon& p, const GsPnt2& a, const GsPnt2& b, const GsPolygon& /*path*/, float /*radius */)
+{
+	GsVec2 x;
+	if ( lines_intersect ( p.top(1), p.top(), a, b, x ) )
+	{	p.top() = x;
+		p.push() = b;
+	}
+	else // lines are parallel
+	{	p.top() = b; }
+}
+
+// method SnPolyed::add_polygon_selection() can be easilly used to test this method
+void GsPolygon::inflate ( const GsPolygon& p, float radius, float dang )
+{
+	size ( 0 );
+	open ( false );
+	if ( radius<=0 ) { *this=p; return; }
+
+	if ( p.size()<=2 )
+	{	if ( p.size()<=0 ) { return; }
+		if ( p.size()==1 ) { circle_approximation ( p[0], radius, int(gs2pi/dang)+1 ); return; }
+		if ( p[0]==p[1] )  { circle_approximation ( p[0], radius, int(gs2pi/dang)+1 ); return; }
+	}
+
+	double t1x, t1y, t2x, t2y, t3x, t3y, t4x, t4y, res;
+	GsPnt2 t1, t2, t3, t4;
+
+	int i;
+	char convex;
+
+	if ( p.open() ) 
+	{	GsPolygon  top; // the top part of the polygon
+		GsPolygon& bot = *this; // the bottom part of the polygon
+
+		for ( i=1; i<p.size(); i++ )
+		{	res = gs_external_tangents ( p[i-1].x, p[i-1].y, radius, p[i].x, p[i].y, radius,
+										 t1x, t1y, t2x, t2y, t3x, t3y, t4x, t4y );
+			if ( res<0 ) continue; // will happen in case of duplicated points
+
+			t1.set ( float(t1x), float(t1y) );
+			t2.set ( float(t2x), float(t2y) );
+			t3.set ( float(t3x), float(t3y) );
+			t4.set ( float(t4x), float(t4y) );
+
+			convex = 0;
+			if ( i>1 ) convex = ::ccw(p[i-2],p[i-1],p[i])>=0? 'b':'t'; 
+
+			if ( convex=='t' )
+			{	addconc ( i, bot, t1, t2, p, radius );
+				addconv ( i, top, t3, t4, p, radius, -dang );
+			}
+			else if ( convex=='b' )
+			{	addconv ( i, bot, t1, t2, p, radius, dang );
+				addconc ( i, top, t3, t4, p, radius );
+			}
+			else
+			{	bot.push()=t1; bot.push()=t2;
+				top.push()=t3; top.push()=t4;
+			}
+		}
+
+		// add the end half-circle:
+		GsPnt2 x = bot.pop();
+		GsPnt2 y = top.pop();
+		bot.arc ( p.top(), x-p.top(), y-p.top(), radius, dang );
+
+		// add the top part in reverse order:
+		while ( top.size()>1 ) bot.push()=top.pop();
+
+		// add the end half-circle:
+		bot.arc ( p[0], top.top()-p[0], bot[0]-p[0], radius, dang );
+	}
+	else // inflate polygon
+	{	int im1, im2;
+
+		for ( i=0; i<p.size(); i++ )
+		{	im1 = p.vid(i-1);
+			im2 = p.vid(i-2);
+			res = gs_external_tangents ( p[im1].x, p[im1].y, radius, p[i].x, p[i].y, radius,
+										 t1x, t1y, t2x, t2y, t3x, t3y, t4x, t4y );
+			if ( res<0 ) continue;
+			t1.set ( float(t1x), float(t1y) );
+			t2.set ( float(t2x), float(t2y) );
+
+			if ( i==0 ) { push()=t1; push()=t2; continue; }
+
+			if ( ::ccw(p[im2],p[im1],p[i])>=0 )
+				addconv ( i, *this, t1, t2, p, radius, dang );
+			else
+				addconc ( i, *this, t1, t2, p, radius );
+		}
+
+		if ( ::ccw(p.top(1),p.top(),p[0])>0 )
+		{	GsVec2 tp=top();
+			pop();
+			arc ( p.top(), tp-p.top(), get(0)-p.top(), radius, dang );
+			pop();
+		}
+		else
+		{	GsVec2 x;
+			lines_intersect ( get(0), get(1), top(1), top(), x );
+			get(0)=x; pop();
+		}
 	}
 }
 

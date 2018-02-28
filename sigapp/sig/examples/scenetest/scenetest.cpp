@@ -157,7 +157,7 @@ void PrimViewer::build_scene ()
 	for ( int i=0; i<10; i++ )
 	{	mtl.diffuse.setrandom();
 		rootg()->add ( new SnTransform(mat) );
-		rootg()->add ( new SnMaterial(mtl) ); // material to affect the adjcent shape in the group
+		rootg()->add ( new SnMaterial(mtl) ); // material to affect the adjacent shape in the group
 		rootg()->add ( prim ); // here we are re-using the same sphere
 	}
 }

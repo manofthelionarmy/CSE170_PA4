@@ -22,14 +22,13 @@ class GsGraphBase;
 
 /*! GsGraphLink contains the minimal needed information for
 	a link. To attach user-related information, GsGraphLink
-	must be derived and as well a corresponding 
-	GsManagerBased, which will manage only the user data. */
+	and GsManager must be derived and properly implemented. */
 class GsGraphLink
 {  private :
-	GsGraphNode* _node; // node this link is pointing to
-	gsuint _index;	  // index for traversing
+	GsGraphNode* _node;	// node this link is pointing to
+	gsuint _index;		// index for traversing
 	float _cost;		// cost for minimum paths
-	int _blocked;	   // used as boolean or as a ref counter
+	int _blocked;		// used as boolean or as a ref counter
 	friend class GsGraphNode;
 	friend class GsGraphBase;
    protected :
@@ -55,7 +54,7 @@ class GsGraphNode : public GsListNode
 {  private :
 	GsArray<GsGraphLink*> _links;
 	gsuint _index;
-	int _blocked;	// used as boolean or as a ref counter
+	int _blocked; // used as boolean or as a ref counter
 	GsGraphBase* _graph;
 	friend class GsGraphBase;
    protected :
@@ -87,15 +86,19 @@ class GsGraphNode : public GsListNode
 	/*! Returns the new link created */
 	GsGraphLink* linkto ( GsGraphNode* n, float cost=0 );
 
-	/*! Remove link of index ni, with a fast remove: the order in the
+	/*! Remove all links going out of, and coming to, this node */
+	void unlink ();
+
+	/*! Remove link of index li, with a fast remove: the order in the
 		links array is not mantained */
-	void unlink ( int ni );
+	void unlink ( int li );
 
 	/*! Remove the link pointing to n. Should be called ONLY when it is
 		guaranteed that the link to n really exists! Uses method unlink(ni) */
 	void unlink ( GsGraphNode* n ) { unlink ( search_link(n) ); }
 
-	/*! Returns the index in the links array, or -1 if not linked to n */
+	/*! Returns the index in the links array, or -1 if not linked to n.
+		The search starts from the latest link inserted, optimizing many dynamic scenarios. */
 	int search_link ( GsGraphNode* n ) const;
 
 	/*! Returns the link pointing to n. Should be called ONLY when it is
@@ -149,11 +152,11 @@ class GsGraphBase
 {  private :
 	GsList<GsGraphNode> _nodes;
 	GsArray<GsGraphNode*> _buffer;
-	gsuint _curmark;
-	char _mark_status;
+	mutable gsuint _curmark;
+	mutable char _mark_status;
 	GsGraphPathTree* _pt;
 	GsManagerBase* _lman; // link manager for a class deriving GsGraphLink
-	gscenum _leave_indices_after_save;
+	mutable gscenum _leave_indices_after_save;
 
    public :
 	/*! Constructor requires managers for nodes and links */
@@ -181,22 +184,22 @@ class GsGraphBase
 	int num_links () const;
 
 	/*! Methods for marking nodes and links */
-	void begin_marking ();
-	void end_marking ();
-	bool marked ( GsGraphNode* n );
-	void mark ( GsGraphNode* n );
-	void unmark ( GsGraphNode* n );
-	bool marked ( GsGraphLink* l );
-	void mark ( GsGraphLink* l );
-	void unmark ( GsGraphLink* l );
+	void begin_marking () const;
+	void end_marking () const;
+	bool marked ( GsGraphNode* n ) const;
+	void mark ( GsGraphNode* n ) const;
+	void unmark ( GsGraphNode* n ) const;
+	bool marked ( GsGraphLink* l ) const;
+	void mark ( GsGraphLink* l ) const;
+	void unmark ( GsGraphLink* l ) const;
 
 	/*! Methods for indexing nodes and links */
-	void begin_indexing ();
-	void end_indexing ();
-	gsuint index ( GsGraphNode* n );
-	void index ( GsGraphNode* n, gsuint i );
-	gsuint index ( GsGraphLink* l );
-	void index ( GsGraphLink* l, gsuint i );
+	void begin_indexing () const;
+	void end_indexing () const;
+	gsuint index ( GsGraphNode* n ) const;
+	void index ( GsGraphNode* n, gsuint i ) const;
+	gsuint index ( GsGraphLink* l ) const;
+	void index ( GsGraphLink* l, gsuint i ) const;
 
 	/*! Returns the list of nodes, that should be used with
 		care to not invalidate some GsGraph operations. */
@@ -243,8 +246,8 @@ class GsGraphBase
 	/*! Get all nodes which are in the same connected component of source */
 	void get_connected_nodes ( GsGraphNode* source, GsArray<GsGraphNode*>& nodes );
 
-	/*! Organize nodes by connected components. The indices in array components say each
-		start and end position in array nodes for each component */
+	/*! Organize nodes by connected components. The indices in array components give
+		pairs of start and end positions in array nodes, for each component. */
 	void get_disconnected_components ( GsArray<int>& components, GsArray<GsGraphNode*>& nodes );
 
 	/*! The returned path contains pointers to existing nodes in the graph.
@@ -253,11 +256,12 @@ class GsGraphBase
 		is returned. In all cases, returns the distance (cost) of the path.
 		In case no path is found, the optional parameters distfunc and udata
 		can be used to return the path to the closest processed node to the goal.
+//xxx ***GsGraph is under revision***
 		TodoNote: for improved efficiency (and to save 1 float in GsGraphNode), 
 		this implementation does not have the "relax" test - this is to be revised. */
-	float get_short_path ( GsGraphNode* n1, GsGraphNode* n2, GsArray<GsGraphNode*>& path,
-						   float (*distfunc) ( const GsGraphNode*, const GsGraphNode*, void* udata )=0,
-						   void* udata=0 );
+	bool search_path ( GsGraphNode* n1, GsGraphNode* n2, GsArray<GsGraphNode*>& path, float& cost,
+						float (*distfunc) ( const GsGraphNode*, const GsGraphNode*, void* udata )=0,
+						void* udata=0 );
 
 	/*! Performs an A* search from startn, until finding endn. The search 
 		stops if either maxnodes or maxdist is reached. If these parameters
@@ -285,7 +289,7 @@ class GsGraphBase
 	/*! Outputs the graph in the format: [ (l1..lk)e1 (..)e2 (..)en ].
 		Nodes are indexed (starting from 0), and after the output
 		all indices of the nodes are set to 0. */
-	void output ( GsOutput& o );
+	void output ( GsOutput& o ) const;
 
 	/*! Initializes the current graph and load another one from the given input.
 		Method buffer() can be used to retrieve an array with all nodes loaded,
@@ -293,13 +297,13 @@ class GsGraphBase
 	void input ( GsInput& i );
 
 	/*! Output operator */
-	friend GsOutput& operator<< ( GsOutput& o, GsGraphBase& g ) { g.output(o); return o; }
+	friend GsOutput& operator<< ( GsOutput& o, const GsGraphBase& g ) { g.output(o); return o; }
 
 	/*! Input operator */
 	friend GsInput& operator>> ( GsInput& i, GsGraphBase& g ) { g.input(i); return i; }
 
    private :
-	void _normalize_mark();
+	void _normalize_mark() const;
 };
 
 //================================ GsGraph =================================================
@@ -321,19 +325,19 @@ class GsGraph : public GsGraphBase
 	N* first_node () const { return (N*) GsGraphBase::first_node(); }
 
 	void get_undirected_edges ( GsArray<N*>& edges )
-	  { GsGraphBase::get_undirected_edges( (GsArray<GsGraphNode*>&)edges ); }
+	{	GsGraphBase::get_undirected_edges( (GsArray<GsGraphNode*>&)edges ); }
 
 	void get_disconnected_components ( GsArray<int>& components, GsArray<N*>& nodes )
-	 { GsGraphBase::get_disconnected_components( components, (GsArray<GsGraphNode*>&)nodes ); }
+	{	GsGraphBase::get_disconnected_components( components, (GsArray<GsGraphNode*>&)nodes ); }
 
-	float get_short_path ( N* n1, N* n2, GsArray<N*>& path,
-						   float (*distfunc) ( const GsGraphNode*, const GsGraphNode*, void* udata )=0,
-						   void* udata=0  )
-	 { return GsGraphBase::get_short_path((GsGraphNode*)n1,(GsGraphNode*)n2,(GsArray<GsGraphNode*>&)path,distfunc,udata); }
+	bool search_path ( N* n1, N* n2, GsArray<N*>& path, float& cost,
+						float (*distfunc) ( const GsGraphNode*, const GsGraphNode*, void* udata )=0,
+						void* udata=0  )
+	{	return GsGraphBase::search_path((GsGraphNode*)n1,(GsGraphNode*)n2,(GsArray<GsGraphNode*>&)path,cost,distfunc,udata); }
 
 	GsArray<N*>& buffer () { return (GsArray<N*>&) GsGraphBase::buffer(); }
 
-	friend GsOutput& operator<< ( GsOutput& o, GsGraph& g ) { return o<<(GsGraphBase&)g; }
+	friend GsOutput& operator<< ( GsOutput& o, const GsGraph& g ) { return o<<(GsGraphBase&)g; }
 	friend GsInput& operator>> ( GsInput& i, GsGraph& g ) { return i>>(GsGraphBase&)g; }
 };
 

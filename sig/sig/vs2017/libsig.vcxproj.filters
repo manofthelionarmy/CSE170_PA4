@@ -252,6 +252,9 @@
     <ClCompile Include="..\src\sig\sn_material.cpp">
       <Filter>scene nodes</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\sig\gs_vis_graph.cpp">
+      <Filter>graphics and system</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\sig\cd_implementation.h">
@@ -496,6 +499,9 @@
     </ClInclude>
     <ClInclude Include="..\include\sig\sn_material.h">
       <Filter>scene nodes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\sig\gs_vis_graph.h">
+      <Filter>graphics and system</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

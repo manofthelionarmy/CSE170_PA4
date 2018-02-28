@@ -12,13 +12,19 @@ class MyViewer : public WsViewer
 	enum MenuEv { EvNormals, EvAnimate, EvExit };
 	UiCheckButton* _nbut;
 	bool _animating;
+	float upperArmRot; 
+	float lowerArmRot; 
+	float handRot; 
    public :
 	MyViewer ( int x, int y, int w, int h, const char* l );
 	void build_ui ();
 	void add_model ( SnShape* s, GsVec p );
 	void build_scene ();
+	void build_arm_scene();
 	void show_normals ( bool b );
 	void run_animation ();
+	void run_arm_animation();
+	void update_arm();
 	virtual int handle_keyboard ( const GsEvent &e ) override;
 	virtual int uievent ( int e ) override;
 };

@@ -590,13 +590,16 @@ void GlResources::declare_default_shaders ()
 	r.declare_uniform ( p, 4, "mColors" );
 	r.declare_uniform ( p, 5, "mParams" );
 
-	p = r.declare_program ( "3dtextured", 3, vs3dtextured, vshadefunc, fs3dtextured );
+	p = r.declare_program ( "3dtextured", 3, vs3dtextured, fs3dtextured, fshadefunc );
 	r.declare_uniform ( p, 0, "vProj" );
 	r.declare_uniform ( p, 1, "vView" );
 	r.declare_uniform ( p, 2, "lPos" );
 	r.declare_uniform ( p, 3, "lInt" );
 	r.declare_uniform ( p, 4, "mColors" );
 	r.declare_uniform ( p, 5, "mParams" );
+	r.declare_uniform ( p, 6, "Mode" );
+	r.declare_uniform ( p, 7, "TexId" );
+
 
 	p = r.declare_program ( "3dphong", 3, vs3dphong, fsphong, fshadefunc );
 	r.declare_uniform ( p, 0, "vProj" );

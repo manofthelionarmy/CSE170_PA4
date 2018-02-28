@@ -172,55 +172,66 @@ void GsModel::compress ()
 }
 
 void GsModel::validate ()
- {
-   GsArray<int> iarray;
-   GsStrings sarray;
+{
+	GsArray<int> iarray;
+	GsStrings sarray;
 
-   int fsize = F.size();
-   int vsize = V.size();
+	int fsize = F.size();
+	int vsize = V.size();
+	int gsize = G.size();
 
-   // check if the model is empty:
-   if ( fsize==0 || vsize==0 )
-	{ GS_TRACE3("No Faces!");
-	  init ();
-	  compress ();
-	  return;
+	// check if the model is empty:
+	if ( fsize==0 || vsize==0 )
+	{	GS_TRACE3("No Faces!");
+		init ();
+		compress ();
+		return;
 	}
 
-   // check size of Fn:
-   if ( N.size()==0 )
-	{ Fn.size(0);
+	// check size of Fn:
+	if ( N.size()==0 )
+	{	Fn.size(0);
 	}
-   else if ( Fn.size()!=fsize )
-	{ Fn.size(0);
-	  GS_TRACE3("Fn mismatch!");
-	  if ( N.size()!=fsize && N.size()!=vsize )
-	   { N.size(0);
-		 GS_TRACE3("N mismatch!");
-	   }
-	}
-
-   // check validity of T:
-   if ( T.size()>0 && Ft.empty() )
-	{ T.size(0);
-	  GS_TRACE3("Texture coords mismatch!");
+	else if ( Fn.size()!=fsize )
+	{	Fn.size(0);
+		GS_TRACE3("Fn mismatch!");
+		if ( N.size()!=fsize && N.size()!=vsize )
+		{	N.size(0);
+			GS_TRACE3("N mismatch!");
+		}
 	}
 
-   // check G size:
-   if ( G.size()>0 && G.size()!=M.size() )
-	{ clear_groups();
-	  GS_TRACE3("Group mismatch!");
+	// check validity of T:
+	if ( T.size()>0 && Ft.empty() )
+	{	T.size(0);
+		GS_TRACE3("Texture coords mismatch!");
 	}
 
-   // check M size:
-   if ( M.size()!=fsize && M.size()!=vsize && M.size()!=G.size() )
-	{ M.size ( 0 );
-	  GS_TRACE3("Materials mismatch!");
+	// check groups:
+	if ( gsize )
+	{	if ( gsize!=M.size() )
+		{	clear_groups();
+			GS_TRACE3("Group mismatch!");
+		}
+		else
+		{	for ( int i=0; i<gsize; i++ )
+			{	if ( G[i].fi+G[i].fn>fsize )
+				{	G[i].fn = fsize-G[i].fi;
+					GS_TRACE3("Group range fixed!");
+				}
+			}
+		}
 	}
 
-   detect_mode ();
-   GS_TRACE3("Validate finished.");
- }
+	// check M size:
+	if ( M.size()!=fsize && M.size()!=vsize && M.size()!=G.size() )
+	{	M.size ( 0 );
+		GS_TRACE3("Materials mismatch!");
+	}
+
+	detect_mode ();
+	GS_TRACE3("Validate finished.");
+}
 
 void GsModel::add_model ( const GsModel& m )
  {
@@ -335,7 +346,7 @@ void GsModel::clear_texture_arrays ()
 void GsModel::clear_groups ()
 {
 	while ( G.size() )
-	{	G.top().mtlname.set(0);
+	{	delete G.top().mtlname;
 		delete G.top().dmap;
 		G.pop();
 	}
@@ -376,7 +387,7 @@ void GsModel::define_groups ( const GsArray<int>& Fm, const GsStrings* mtlnames 
 		nM.push()=M[m];
 		G.push();
 		G.top().init ( nF.size(), A.size() );
-		if (mtlnames) G.top().mtlname = mtlnames->get(0);
+		if (mtlnames) G.top().mtlname = gs_string_new ( mtlnames->get(0) );
 		GS_TRACE1 ( "Reindexing group "<<(G.size()-1)<<"...");
 		for ( int i=0; i<A.size(); i++ )
 		{	nF.push()=F[A[i]];
@@ -707,53 +718,52 @@ GsArray<GsModel::Face>* GsModel::get_edges_per_vertex()
  }
 
 GsArray<int>* GsModel::get_edges()
- {
-   int i;
-   if ( F.empty() ) return 0;
+{
+	if ( F.empty() ) return 0;
 
-   // The approach here is to ensure uniqueness by sorting the edges per vertex,
-   // this is faster than global tree sorting after about 700 vertices.
-   // Allocate array per vertex:
-   GsArray<int>* va = new GsArray<int>[V.size()];
+	// The approach here is to ensure uniqueness by sorting the edges per vertex,
+	// this is faster than global tree sorting after about 700 vertices.
+	// Allocate array per vertex:
+	GsArray<int>* va = new GsArray<int>[V.size()];
 
-   // Get slight improvements by reducing re-allocations per vertex:
-   for ( i=0; i<V.size(); i++ ) va[i].reserve(8);
+	// Get slight improvements by reducing re-allocations per vertex:
+	int i, s;
+	for ( i=0, s=V.size(); i<s; i++ ) va[i].reserve(8);
 
-   // Add unique edges per vertex:
-   // Note: tests indicated uniqpush() about 2x faster than uniqinsort()
-   int min, max;
-   for ( i=0; i<F.size(); i++ )
-	{ const Face& f=F[i];
-	  GS_MIN_MAX(f.a,f.b,min,max); va[min].uniqpush ( max, gs_compare );
-	  GS_MIN_MAX(f.b,f.c,min,max); va[min].uniqpush ( max, gs_compare );
-	  GS_MIN_MAX(f.c,f.a,min,max); va[min].uniqpush ( max, gs_compare );
+	// Add unique edges per vertex:
+	// Note: tests indicated uniqpush() about 2x faster than uniqinsort()
+	int min, max;
+	for ( i=0, s=F.size(); i<s; i++ )
+	{	const Face& f=F[i];
+		GS_MIN_MAX(f.a,f.b,min,max); va[min].uniqpush ( max, gs_compare );
+		GS_MIN_MAX(f.b,f.c,min,max); va[min].uniqpush ( max, gs_compare );
+		GS_MIN_MAX(f.c,f.a,min,max); va[min].uniqpush ( max, gs_compare );
 	}
 
-   // return:
-   return va;
- }
+	// return:
+	return va;
+}
 
 void GsModel::get_edges ( GsArray<int> &E )
- {
-   int i;
-   E.size(0);
-   if ( F.empty() ) return;
+{
+	E.size(0);
+	if ( F.empty() ) return;
 
-   // Get array of edges:
-   GsArray<int>* va = get_edges();
+	// Get array of edges:
+	GsArray<int>* va = get_edges();
 
-   // Put result in linear array E:
-   E.reserve ( F.size()+V.size()-2 ); // E=F+V-2 estimation if a polyhedron
-   for ( i=0; i<V.size(); i++ )
-	{ for ( int j=0; j<va[i].size(); j++ )
-	   { E.push() = i;
-		 E.push() = va[i][j];
-	   }
+	// Put result in linear array E:
+	E.reserve ( F.size()+V.size()-2 ); // E=F+V-2 estimation if a polyhedron
+	for ( int i=0, is=V.size(); i<is; i++ )
+	{	for ( int j=0, js=va[i].size(); j<js; j++ )
+		{	E.push() = i;
+			E.push() = va[i][j];
+		}
 	}
 
-   // delete va array:
-   delete[] va;
- }
+	// delete va array:
+	delete[] va;
+}
 
 int GsModel::pick_face ( const GsLine& line ) const
 {
@@ -771,66 +781,66 @@ int GsModel::pick_face ( const GsLine& line ) const
 }
 
 void GsModel::normalize ( float maxcoord )
- {
-   GsVec p; GsBox box;
+{
+	GsVec p; GsBox box;
 
-   get_bounding_box(box);
+	get_bounding_box(box);
 
-   p = box.center() * -1.0;
-   translate ( p );
+	p = box.center() * -1.0;
+	translate ( p );
 
-   box+=p;
-   GS_SETPOS(box.a.x); GS_SETPOS(box.a.y); GS_SETPOS(box.a.z);
-   GS_SETPOS(box.b.x); GS_SETPOS(box.b.y); GS_SETPOS(box.b.z);
+	box+=p;
+	GS_SETPOS(box.a.x); GS_SETPOS(box.a.y); GS_SETPOS(box.a.z);
+	GS_SETPOS(box.b.x); GS_SETPOS(box.b.y); GS_SETPOS(box.b.z);
 
-   p.x = GS_MAX(box.a.x,box.b.x);
-   p.y = GS_MAX(box.a.y,box.b.y);
-   p.z = GS_MAX(box.a.z,box.b.z);
+	p.x = GS_MAX(box.a.x,box.b.x);
+	p.y = GS_MAX(box.a.y,box.b.y);
+	p.z = GS_MAX(box.a.z,box.b.z);
 
-   float maxactual = GS_MAX3(p.x,p.y,p.z);
+	float maxactual = GS_MAX3(p.x,p.y,p.z);
 
-   scale ( maxcoord/maxactual );  // Now we normalize to get the desired radius
- }
+	scale ( maxcoord/maxactual );  // Now we normalize to get the desired radius
+}
 
 void GsModel::get_vertices_per_face ( GsArray<GsVec>& fv ) const
- {
-   fv.size ( F.size()*3 );
-   int n=0;
-   for ( int f=0; f<F.size(); f++ ) 
-	{ fv[n++] = V[F[f].a];
-	  fv[n++] = V[F[f].b];
-	  fv[n++] = V[F[f].c];
+{
+	int n=0, fs=F.size();
+	fv.size ( fs*3 );
+	for ( int f=0; f<fs; f++ ) 
+	{	fv[n++] = V[F[f].a];
+		fv[n++] = V[F[f].b];
+		fv[n++] = V[F[f].c];
 	}
- }
+}
 
 void GsModel::get_texcoords_per_face ( GsArray<GsVec2>& ftc ) const
- {
-   ftc.size ( Ft.size()*3 );
-   int n=0;
-   for ( int f=0; f<Ft.size(); f++ ) 
-	{ ftc[n++] = T[Ft[f].a];
-	  ftc[n++] = T[Ft[f].b];
-	  ftc[n++] = T[Ft[f].c];
+{
+	int n=0, s=Ft.size();
+	ftc.size ( s*3 );
+	for ( int f=0; f<s; f++ ) 
+	{	ftc[n++] = T[Ft[f].a];
+		ftc[n++] = T[Ft[f].b];
+		ftc[n++] = T[Ft[f].c];
 	}
- }
+}
 
 void GsModel::get_materials_per_face ( GsArray<int>& fm ) const
- {
-   fm.size ( F.size() );
-   fm.setall ( 0 ); 
-   for ( int g=0; g<G.size(); g++ )
-	{ for ( int f=0; f<G[g].fn; f++ )
-	   { fm[ G[g].fi+f ] = g; }
+{
+	fm.size ( F.size() );
+	fm.setall ( 0 ); 
+	for ( int g=0, gs=G.size(); g<gs; g++ )
+	{	for ( int f=0, fs=G[g].fn; f<fs; f++ )
+		{	fm[ G[g].fi+f ] = g; }
 	}
- }
+}
 
 void GsModel::get_normals_per_face ( GsArray<GsVec>& fn ) const
 {
-	int n=0;
-	fn.size ( F.size()*3 );
-	if ( _geomode==Hybrid && Fn.size()==F.size() ) // mixed normals
+	int f, n=0, fs=F.size();
+	fn.size ( fs*3 );
+	if ( _geomode==Hybrid && Fn.size()==fs ) // mixed normals
 	{	GS_TRACE7("Retrieving HYBRID face normals...");
-		for ( int f=0; f<F.size(); f++ ) 
+		for ( f=0; f<fs; f++ )
 		{	fn[n++] = N[Fn[f].a];
 			fn[n++] = N[Fn[f].b];
 			fn[n++] = N[Fn[f].c];
@@ -838,7 +848,7 @@ void GsModel::get_normals_per_face ( GsArray<GsVec>& fn ) const
 	}
 	else if ( _geomode==Smooth && N.size()==V.size() ) // smooth normals
 	{	GS_TRACE7("Retrieving SMOOTH face normals...");
-		for ( int f=0; f<F.size(); f++ ) 
+		for ( f=0; f<fs; f++ )
 		{	fn[n++] = N[F[f].a];
 			fn[n++] = N[F[f].b];
 			fn[n++] = N[F[f].c];
@@ -846,7 +856,7 @@ void GsModel::get_normals_per_face ( GsArray<GsVec>& fn ) const
 	}
 	else if ( _geomode==Flat && N.size()==F.size() ) // normals per face
 	{	GS_TRACE7("Retrieving FLAT face normals...");
-		for ( int f=0; f<F.size(); f++ ) 
+		for ( f=0; f<fs; f++ )
 		{	fn[n++] = N[f];
 			fn[n++] = N[f];
 			fn[n++] = N[f];
@@ -860,9 +870,10 @@ void GsModel::get_normals_per_face ( GsArray<GsVec>& fn ) const
 
 void GsModel::get_flat_normals_per_face ( GsArray<GsVec>& fn, int repspernormal ) const
 { 
-	fn.sizeres ( 0, F.size()*repspernormal );
+	int fs=F.size();
+	fn.sizeres ( 0, fs*repspernormal );
 	GsVec normal;
-	for ( int f=0; f<F.size(); f++ ) 
+	for ( int f=0; f<fs; f++ ) 
 	{	normal = face_normal(f);
 		for ( int r=0; r<repspernormal; r++ ) 
 			fn.push() = normal;
@@ -870,93 +881,90 @@ void GsModel::get_flat_normals_per_face ( GsArray<GsVec>& fn, int repspernormal 
 }
 
 GsVec GsModel::face_normal ( int f ) const
- { 
-   GsVec n; 
-   const Face& fac = F[f];
-   n.cross ( V[fac.b]-V[fac.a], V[fac.c]-V[fac.a] ); 
-   n.normalize(); 
-   return n; 
- }
+{
+	GsVec n; 
+	const Face& fac = F[f];
+	n.cross ( V[fac.b]-V[fac.a], V[fac.c]-V[fac.a] ); 
+	n.normalize(); 
+	return n; 
+}
 
 GsVec GsModel::face_center ( int f ) const
- { 
-   GsVec c; 
-   const Face& fac = F[f];
-   return ( V[fac.a] + V[fac.b] + V[fac.c] ) / 3.0f;
- }
+{ 
+	GsVec c; 
+	const Face& fac = F[f];
+	return ( V[fac.a] + V[fac.b] + V[fac.c] ) / 3.0f;
+}
 
 void GsModel::invert_faces ()
- {
-   int i, tmp;
-   for ( i=0; i<F.size(); i++ ) GS_SWAP ( F[i].b, F[i].c );
-   for ( i=0; i<Fn.size(); i++ ) GS_SWAP ( Fn[i].b, Fn[i].c );
-   for ( i=0; i<Ft.size(); i++ ) GS_SWAP ( Ft[i].b, Ft[i].c );
- }
+{
+	int i, s, tmp;
+	for ( i=0, s=F.size(); i<s; i++ ) GS_SWAP ( F[i].b, F[i].c );
+	for ( i=0, s=Fn.size(); i<s; i++ ) GS_SWAP ( Fn[i].b, Fn[i].c );
+	for ( i=0, s=Ft.size(); i<s; i++ ) GS_SWAP ( Ft[i].b, Ft[i].c );
+}
 
 void GsModel::invert_normals ()
- {
-   int i;
-   for ( i=0; i<N.size(); i++ ) N[i]*=-1.0;
- }
+{
+	for ( int i=0, s=N.size(); i<s; i++ ) N[i]*=-1.0;
+}
 
 void GsModel::translate ( const GsVec &tr )
- {
-   int i, s=V.size();
-   for ( i=0; i<s; i++ ) V[i]+=tr;
-   if ( primitive ) { primitive->center += tr; }
- }
+{
+	int i, s=V.size();
+	for ( i=0; i<s; i++ ) V[i]+=tr;
+	if ( primitive ) { primitive->center += tr; }
+}
 
 void GsModel::scale ( float factor )
- {
-   int i, s=V.size();
-   for ( i=0; i<s; i++ ) V[i]*=factor;
-   if ( primitive ) { primitive->ra*=factor; primitive->rb*=factor; primitive->rc*=factor; }
- }
+{
+	int i, s=V.size();
+	for ( i=0; i<s; i++ ) V[i]*=factor;
+	if ( primitive ) { primitive->ra*=factor; primitive->rb*=factor; primitive->rc*=factor; }
+}
 
 void GsModel::centralize ()
- {
-   GsBox box;
-   get_bounding_box(box);
-   GsVec v = box.center() * -1.0;
-   translate ( v );
- }
+{
+	GsBox box;
+	get_bounding_box(box);
+	GsVec v = box.center() * -1.0;
+	translate ( v );
+}
 
 void GsModel::transform ( const GsMat& mat, bool primtransf )
- {
-   int i, size;
-   GsMat m = mat;
+{
+	int i, size;
+	GsMat m = mat;
 
-   if ( primtransf )
-	{ GsQuat q(mat);
-	  GsVec t(mat.e14,mat.e24,mat.e34);
-	  rotate ( q );
-	  translate ( t );
-	  return;
+	if ( primtransf )
+	{	GsQuat q(mat);
+		GsVec t(mat.e14,mat.e24,mat.e34);
+		rotate ( q );
+		translate ( t );
+		return;
 	}
 
-   size = V.size();
-   for ( i=0; i<size; i++ ) V[i] = m * V[i];
+	size = V.size();
+	for ( i=0; i<size; i++ ) V[i] = m * V[i];
 
-   size = N.size();
-   if ( size<=0 ) return;
+	size = N.size();
+	if ( size<=0 ) return;
    
-   // ok, apply to N:
-   m.setrans ( 0, 0, 0 ); // remove translation
-   for ( i=0; i<size; i++ ) { N[i]= m*N[i]; N[i].normalize(); }  // MatChange: affects here
+	// ok, apply to N:
+	m.setrans ( 0, 0, 0 ); // remove translation
+	for ( i=0; i<size; i++ ) { N[i]= m*N[i]; N[i].normalize(); }  // MatChange: affects here
 
-   // will no longer be a primitive:
-   if ( primitive ) { delete primitive; primitive=0; }
- }
+	// will no longer be a primitive:
+	if ( primitive ) { delete primitive; primitive=0; }
+}
  
 void GsModel::rotate ( const GsQuat& q )
- {
-   int i, size;
-   size = V.size();
-   for ( i=0; i<size; i++ ) V[i] = q.apply(V[i]);
-   size = N.size();
-   for ( i=0; i<size; i++ ) N[i] = q.apply(N[i]);
+{
+	int i, s;
+	for ( i=0, s=V.size(); i<s; i++ ) V[i] = q.apply(V[i]);
+	for ( i=0, s=N.size(); i<s; i++ ) N[i] = q.apply(N[i]);
 
-   if ( primitive ) { primitive->orientation = primitive->orientation * q; }
- }
+	if ( primitive ) { primitive->orientation = q * primitive->orientation; }
+}
 
 //================================ End of File =================================================

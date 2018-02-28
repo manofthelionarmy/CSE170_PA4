@@ -165,6 +165,29 @@ bool gs_in_triangle ( double p1x, double p1y, double p2x, double p2y, double p3x
 bool gs_in_triangle_interior ( double p1x, double p1y, double p2x, double p2y, double p3x, double p3y,
 							   double px, double py );
 
+/*! Given point p=(px,py) and circle c=(cx,cy,r), returns the two tangent points 
+    t1=(t1x,t1y) and t2=(t2x,t2y) passing trough p. The returned points will be such
+    that: (p,c,t1) has CCW orientation and (p,c,t2) CW orientation.
+    The scalar returned by the function is dist(p,t); -1 is returned in case of error. */
+double gs_tangent ( double px, double py, double cx, double cy, double r, 
+					double& t1x, double& t1y, double& t2x, double& t2y );
+
+/*! Given circles c1=(c1x,c1y,r1) and c2=(c2x,c2y,r2) returns the two external tangent
+    segments t12=(t1x,t1y;t2x,t2y) and t34=(t3x,t3y;t4x,t4y) such that:
+    - t1 and t3 are tangents points on c1, and t2 and t4 on c2;
+    - (c1,t1,c2) has CCW orientation and (c1,t3,c2) has CW orientation.
+    The scalar returned by the function is the length of t12 and t34; -1 will be returned
+    if the tangents could not be computed (for ex: if one circle contains the other). */
+double gs_external_tangents ( double c1x, double c1y, double r1, double c2x, double c2y, double r2, 
+							  double& t1x, double& t1y, double& t2x, double& t2y,
+							  double& t3x, double& t3y, double& t4x, double& t4y );
+
+/*! This function behaves exactly as gs_external_tangents() however it returns the
+    internal tangents (not the external ones). */
+double gs_internal_tangents ( double c1x, double c1y, double r1, double c2x, double c2y, double r2, 
+							  double& t1x, double& t1y, double& t2x, double& t2y,
+							  double& t3x, double& t3y, double& t4x, double& t4y );
+
 //============================== end of file ===============================
 
 # endif // GS_GEO2_H

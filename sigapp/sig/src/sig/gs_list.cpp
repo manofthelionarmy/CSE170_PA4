@@ -43,9 +43,9 @@ GsListBase::~GsListBase ()
  } 
 
 void GsListBase::init ()
- {
-   while (_cur) remove ();
- }
+{
+	while (_cur) remove();
+}
 
 void GsListBase::elements ( int e )
  {
@@ -144,10 +144,10 @@ GsListNode *GsListBase::extract ()
  }
 
 void GsListBase::remove ()
- {
-   void* pt = extract();
-   if ( pt ) _man->free(pt);
- }
+{
+	void* pt = extract();
+	if ( pt ) _man->free(pt);
+}
 
 void GsListBase::sort ()
  {

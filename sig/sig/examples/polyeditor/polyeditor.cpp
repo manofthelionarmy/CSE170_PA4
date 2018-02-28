@@ -22,9 +22,25 @@ class PolyEdViewer : public WsViewer
 	virtual int uievent ( int e ) override;
 };
 
+// callback for polygon edition events, see SnPolyEditor::Events for additional events
+static void my_polyed_callback ( SnPolyEditor* pe, SnPolyEditor::Event e, int pid )
+{
+	PolyEdViewer* v = (PolyEdViewer*)pe->userdata();
+	if ( e==SnPolyEditor::PostMovement )
+	{	v->message ( "Post Movement Event");
+	}
+	else if ( e==SnPolyEditor::PostEdition )
+	{	v->message ( "Post Edition Event");
+	}
+	else if ( e==SnPolyEditor::PostInsertion )
+	{	v->message ( "Post Insertion Event");
+	}
+}
+
 PolyEdViewer::PolyEdViewer ( int x, int y, int w, int h, const char* l ) : WsViewer(x,y,w,h,l)
 { 
 	root ( polyed=new SnPolyEditor );
+	polyed->callback ( my_polyed_callback, this );
 }
 
 const char* Msg = "Keys:\n"

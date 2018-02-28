@@ -58,10 +58,10 @@ class GsModel : public GsShareable
 
 	/*! The group structure keeps material and texture information for group of faces */
 	struct Group
-	{	int fi, fn;		  //!< the initial face index and the number of faces in this group
-		GsCharPt mtlname; //!< name of the material used by this group
-		Texture* dmap;    //!< diffuse color map, or null if there is no diffuse texture
-		void init ( int i, int n ) { fi=i; fn=n; mtlname.pt=0; dmap=0; } //!< to be used as the constructor
+	{	int fi, fn;	   //!< the initial face index and the number of faces in this group
+		char* mtlname; //!< name of the material used by this group
+		Texture* dmap; //!< diffuse color map, or null if there is no diffuse texture
+		void init ( int i, int n ) { fi=i; fn=n; mtlname=0; dmap=0; } //!< to be used as the constructor
 		void copy ( const Group& g );
 	};
 

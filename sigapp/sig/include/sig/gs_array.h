@@ -507,6 +507,12 @@ class GsArrayRef : protected GsArray<X*>
 	/* Access to the base class function of same name. */
 	void compress () { GsArray<X*>::compress(); }
 
+	/* Access to the base class function of same name. */
+	int vid ( int index ) const { return GsArray<X*>::vid(index); }
+
+	/* Access to the base class function of same name. */
+	int vidpos ( int index ) const { return GsArray<X*>::vidpos(index); }
+
 	/*! Calls unref for element in position i, and then removes the position */
 	void remove ( int i ) { get(i)->unref(); GsArray<X*>::remove(i,1); }
 
